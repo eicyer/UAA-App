@@ -1,0 +1,58 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const moment = require('moment');
+const app = express();
+app.use(express.json());
+
+const studentSchema = new mongoose.Schema({
+  studentNumber: String,
+  name: String,
+  classes: [{
+    subject: String,
+    startTime: String,  // HH:mm format
+    endTime: String,
+    day: String  // 'Monday', 'Tuesday', etc.
+  }]
+});
+
+const Student = mongoose.model('Student', studentSchema);
+
+// Endpoint to check student number and fetch class list
+app.get('/api/student/:studentNumber', async (req, res) => {
+  try {
+    const student = await Student.findOne({ studentNumber: req.params.studentNumber });
+    if (!student) return res.status(404).send('Student not found');
+    res.send(student.classes);
+  } catch (error) {
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+// Endpoint to get the next class
+app.get('/api/nextclass/:studentNumber', async (req, res) => {
+  const today = moment().format('dddd'); // 'Monday', 'Tuesday', etc.
+  const currentTime = moment().format('HH:mm');
+
+  try {
+    const student = await Student.findOne({ studentNumber: req.params.studentNumber });
+    if (!student) return res.status(404).send('Student not found');
+
+    const todaysClasses = student.classes.filter(c => c.day === today);
+    const nextClass = todaysClasses.find(c => moment(currentTime, 'HH:mm').isBefore(moment(c.startTime, 'HH:mm')));
+
+    if (nextClass) {
+      res.send(nextClass);
+    } else {
+      res.send('No more classes today');
+    }
+  } catch (error) {
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+mongoose.connect('your_mongodb_connection_string', { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('Could not connect to MongoDB...', err));
